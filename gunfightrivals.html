@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gunfight Rivals</title>
+<style>
+body { margin:0; overflow:hidden; background:#222; color:white; font-family:sans-serif; }
+#menu, #gunMenu, #shopMenu { position:absolute; width:100%; height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; }
+button { margin:10px; padding:10px 20px; font-size:18px; cursor:pointer; }
+canvas { display:block; background:#333; }
+#inGameShopBtn { position:absolute; top:20px; right:20px; padding:8px 12px; font-size:16px; z-index:10; }
+</style>
+</head>
+<body>
+
+<div id="menu">
+  <h1>Gunfight Rivals</h1>
+  <button id="gunBtn">Customize Gun</button>
+  <button id="startBtn">Start Endless Mode</button>
+  <h4>DEMO 0.1 - 26/10/2025</h4>
+  <h5>BY Xturret</h5>
+</div>
+
+<div id="gunMenu" style="display:none;">
+  <h2>Choose Gun Model</h2>
+  <button class="gunSelect" data-gun="Cattle.PNG">Colt Single Action</button>
+  <button class="gunSelect" data-gun="Lem.PNG">Lemat Revolver</button>
+  <button class="gunSelect" data-gun="Sco.PNG">S&W Scofield</button>
+  <button class="gunSelect" data-gun="Pat.PNG">Colt Patterson</button>
+  <button class="gunSelect" data-gun="Der.PNG">Derringer</button>
+  <button id="backGun">Back to Menu</button>
+</div>
+
+<div id="shopMenu" style="display:none;">
+  <h2>Shop</h2>
+  <button id="healBtn">Heal 10+ (5 Coins)</button>
+  <button id="shotgunBtn">Shotgun Bullet (Double Shot) (20 Coins)</button>
+  <button id="rifleBtn">Rifle Bullet (Damage 30+) (25 Coins)</button>
+  <button id="sniperBtn">Sniper Bullet (Damage 50+) (50 Coins)</button>
+  <button id="closeShopBtn">Resume Game</button>
+</div>
+
+<button id="inGameShopBtn" style="display:none;">Shop</button>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// --- Game Variables ---
+let highestScore = 0;
+let score = 0;
+let coins = 0;
+let spawnInterval;
+let paused = false;
+let playerDamage = 50;
+let playerHealAmount = 10;
+let doubleShot = false;
+
+// --- Player ---
+let playerImg = new Image(); playerImg.src = 'Cattle.PNG';
+let player = { x: canvas.width/2, y: canvas.height/2, hp:500, w:100, h:50, angle:0, img:playerImg };
+
+// --- Enemies & Bullets ---
+let enemies = [];
+let bullets = [];
+
+// --- Sounds ---
+const gunshotSound = new Audio('gunshot.mp3');
+
+// --- Menu ---
+document.getElementById('startBtn').onclick = () => { document.getElementById('menu').style.display='none'; startEndlessMode(); };
+document.getElementById('gunBtn').onclick = () => { document.getElementById('menu').style.display='none'; document.getElementById('gunMenu').style.display='flex'; };
+document.getElementById('backGun').onclick = () => { document.getElementById('gunMenu').style.display='none'; document.getElementById('menu').style.display='flex'; };
+document.querySelectorAll('.gunSelect').forEach(btn=>{
+  btn.onclick = () => { playerImg.src = btn.dataset.gun; player.img = playerImg; alert('Gun selected!'); };
+});
+
+// --- Shop ---
+const inGameShopBtn = document.getElementById('inGameShopBtn');
+const shopMenu = document.getElementById('shopMenu');
+document.getElementById('closeShopBtn').onclick = () => { shopMenu.style.display='none'; inGameShopBtn.style.display='block'; paused=false; };
+inGameShopBtn.onclick = () => { paused=true; shopMenu.style.display='flex'; inGameShopBtn.style.display='none'; };
+
+document.getElementById('healBtn').onclick = () => { if(coins>=5){ coins-=5; player.hp+=10; playerHealAmount+=10; updateCoins(); } };
+document.getElementById('shotgunBtn').onclick = () => { if(coins>=20){ coins-=20; doubleShot=true; updateCoins(); } };
+document.getElementById('rifleBtn').onclick = () => { if(coins>=25){ coins-=25; playerDamage=30; updateCoins(); } };
+document.getElementById('sniperBtn').onclick = () => { if(coins>=50){ coins-=50; playerDamage=50; updateCoins(); } };
+
+function updateCoins(){}
+
+// --- Mouse/touch aiming ---
+function getMousePos(e){ return e.touches ? {x:e.touches[0].clientX, y:e.touches[0].clientY} : {x:e.clientX, y:e.clientY}; }
+canvas.addEventListener('mousemove', e => { const pos=getMousePos(e); player.angle=Math.atan2(pos.y-player.y,pos.x-player.x); });
+canvas.addEventListener('touchmove', e => { const pos=getMousePos(e); player.angle=Math.atan2(pos.y-player.y,pos.x-player.x); e.preventDefault(); }, {passive:false});
+canvas.addEventListener('click', shoot);
+canvas.addEventListener('touchstart', shoot);
+
+function shoot(){
+  bullets.push({x:player.x, y:player.y, angle:player.angle, speed:50, fromPlayer:true});
+  if(doubleShot){
+    bullets.push({x:player.x, y:player.y, angle:player.angle+0.1, speed:50, fromPlayer:true});
+    bullets.push({x:player.x, y:player.y, angle:player.angle-0.1, speed:50, fromPlayer:true});
+  }
+  gunshotSound.currentTime=0; gunshotSound.play();
+}
+
+// --- Enemy spawn ---
+function spawnEnemy(){ 
+  let enemy = { x:Math.random()*canvas.width, y:Math.random()*canvas.height, hp:500, w:110, h:60, angle:0, img:new Image() };
+  enemy.img.src='Gun2.PNG';
+  enemies.push(enemy); 
+}
+
+// --- Endless Mode ---
+function startEndlessMode(){
+  enemies=[]; bullets=[]; player.hp=500; score=0; coins=0; doubleShot=false; playerDamage=50; playerHealAmount=10;
+  spawnEnemy();
+  spawnInterval = setInterval(spawnEnemy,5000);
+  inGameShopBtn.style.display='block';
+  requestAnimationFrame(gameLoop);
+}
+
+// --- Game Loop ---
+function gameLoop(){
+  if(!paused){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    drawRotated(player.img, player.x, player.y, player.angle, player.w, player.h);
+
+    enemies.forEach(enemy=>{
+      enemy.angle=Math.atan2(player.y-enemy.y,player.x-enemy.x);
+      enemy.x += Math.cos(enemy.angle)*1;
+      enemy.y += Math.sin(enemy.angle)*1;
+      drawRotated(enemy.img, enemy.x, enemy.y, enemy.angle, enemy.w, enemy.h);
+      if(Math.random()<0.01) bullets.push({x:enemy.x, y:enemy.y, angle:enemy.angle, speed:50, fromPlayer:false});
+    });
+
+    bullets.forEach((b,i)=>{
+      b.x += Math.cos(b.angle)*b.speed;
+      b.y += Math.sin(b.angle)*b.speed;
+
+      if(b.fromPlayer){
+        enemies.forEach((enemy,j)=>{
+          if(Math.hypot(b.x-enemy.x,b.y-enemy.y)<25){
+            enemy.hp-=playerDamage;
+            bullets.splice(i,1);
+            if(enemy.hp<=0){ coins+=1; score+=1; if(score>highestScore) highestScore=score; }
+          }
+        });
+      } else {
+        if(Math.hypot(b.x-player.x,b.y-player.y)<25){ player.hp-=playerHealAmount; bullets.splice(i,1); }
+      }
+
+      ctx.fillStyle='yellow';
+      ctx.beginPath();
+      ctx.arc(b.x,b.y,5,0,Math.PI*2);
+      ctx.fill();
+    });
+
+    enemies = enemies.filter(e=>e.hp>0);
+
+    // --- HUD ---
+    ctx.fillStyle='white';
+    ctx.font='22px Arial';
+    ctx.fillText(`HP: ${player.hp}`,20,30);
+    ctx.fillText(`Coins: ${coins}`,20,60);
+    ctx.fillText(`Score: ${score}`,20,90);
+    ctx.fillText(`High Score: ${highestScore}`,20,120);
+
+    if(player.hp<=0){ alert(`You Died! Final Score: ${score}`); clearInterval(spawnInterval); location.reload(); }
+  }
+  requestAnimationFrame(gameLoop);
+}
+
+// --- Draw Rotated Image ---
+function drawRotated(img,x,y,angle,w,h){ ctx.save(); ctx.translate(x,y); ctx.rotate(angle); ctx.drawImage(img,-w/2,-h/2,w,h); ctx.restore(); }
+
+</script>
+</body>
+</html>
